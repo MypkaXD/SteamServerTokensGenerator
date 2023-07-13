@@ -1,7 +1,6 @@
 {
-  "SteamToken": "token",
-
-  "ServerTokens": {
-    "tokenname1": "token"
-  }
+    "ServerTokens": {
+        "steamserver_token_0": "token"
+    },
+    "SteamToken": "token"
 }
