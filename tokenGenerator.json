@@ -1,5 +1,6 @@
 {
     "ServerTokens": {
+        
     },
-    "SteamToken": ""
+    "SteamToken": "token"
 }

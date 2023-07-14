@@ -1,7 +1,7 @@
-﻿#include <iostream>
-#include <nlohmann/json.hpp>
+﻿#include <nlohmann/json.hpp>
 #include <curl/curl.h>
 
+#include <iostream>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -53,7 +53,7 @@ public:
         writeTokens(result);
 	}
     
-    void overwriteTokens(const nlohmann::json& result) {
+    bool overwriteTokens(const nlohmann::json& result) {
         std::ifstream file("tokenGenerator.json");
         nlohmann::json temp = nlohmann::json::parse(file);
         temp["ServerTokens"] = result;
@@ -62,10 +62,16 @@ public:
         if (outputFile.is_open()) {
             outputFile << temp.dump(4);
             outputFile.close();
+            return true;
+        }
+        else {
+            std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
+            std::cout << "Проверьте его расположенине и название!" << std::endl;
+            return false;
         }
     }
 
-    void writeTokens(const nlohmann::json& result) {
+    bool writeTokens(const nlohmann::json& result) {
         std::ifstream file("tokenGenerator.json");
         nlohmann::json temp = nlohmann::json::parse(file);
         temp["ServerTokens"].merge_patch(result);
@@ -74,6 +80,12 @@ public:
         if (outputFile.is_open()) {
             outputFile << temp.dump(4);
             outputFile.close();
+            return true;
+        }
+        else {
+            std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
+            std::cout << "Проверьте его расположенине и название!" << std::endl;
+            return false;
         }
     }
     
@@ -153,10 +165,128 @@ public:
             "&steamid=" + steamIdOfServer + "&memo=" + newMemo);
     }
 
-    void ListOfTokens() {
+    void ResetLoginToken(const std::string& steamIdOfServer) {
+        /*
+            Possible answers:
+                1) IF all good:
+                    {"response":{"login_token":"new_token"}}
+                2) IF token was recently regenerated:
+                    {"response":{}}
+                3) IF invalid token:
+                    answer is trash
+        */
+        nlohmann::json data;
+        performPostRequest(data, "https://api.steampowered.com/IGameServersService/ResetLoginToken/v1/",
+        "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
+
+        if (data.contains("response") && data["response"].is_object()) {
+            if (!data["response"].empty()) {
+                if (UpdateTokenIdentificatorInJsonFile(steamIdOfServer, data["response"]["login_token"]))
+                    std::cout << "Данные токена " << steamIdOfServer << " успешно обновлены!" << std::endl;
+                else return;
+            }
+            else
+                std::cout << "Вы не можете обновить токен " << steamIdOfServer << ", так как недавно обновляли его!" << std::endl;
+        }
+        else
+            std::cout << "Произошла ошибка или Вы ввели неверные данные, попробуйте позже!" << std::endl;
+    }
+
+    bool UpdateTokenIdentificatorInJsonFile(const std::string& steamIdOfServer, const std::string& steamIdToken) {
+        std::ifstream file("tokenGenerator.json");
+        nlohmann::json data = nlohmann::json::parse(file);
+        data["ServerTokens"][steamIdOfServer]["Identifier"] = steamIdToken;
+
+        std::ofstream outputFile("tokenGenerator.json");
+        if (outputFile.is_open()) {
+            outputFile << data.dump(4);
+            outputFile.close();
+            return true;
+        }
+        else {
+            std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
+            std::cout << "Проверьте его расположенине и название!" << std::endl;
+            return false;
+        }
+    }
+
+    void DeleteAccount(const std::string& steamIdOfServer) {
+        nlohmann::json data;
+        performPostRequest(data, "https://api.steampowered.com/IGameServersService/DeleteAccount/v1/",
+            "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
+        --currentToken;
+    }
+
+    void getUselessTokens(std::vector<std::string>& vectorOfUselessTokens) {
         nlohmann::json data;
         GetAccountList(data);
+
         for (size_t i = 0; i < data["response"]["servers"].size(); ++i) {
+            if (data["response"]["servers"][i]["is_expired"])
+                vectorOfUselessTokens.push_back(data["response"]["servers"][i]["steamid"]);
+            else continue;
+        }
+        size_t size = vectorOfUselessTokens.size();
+        if (size)
+            std::cout << "У Вас " << " неработоспособных токенов!" << std::endl;
+        else
+            std::cout << "У Вас нет неработоспособных токенов!" << std::endl;
+    }
+
+    void fixExpiredTokens() {
+        std::vector<std::string> vectorOfUselessTokens;
+        getUselessTokens(vectorOfUselessTokens);
+        while (!vectorOfUselessTokens.empty()) {
+            ResetLoginToken(vectorOfUselessTokens.back());
+            vectorOfUselessTokens.pop_back();
+        }
+        reloadListofTokens();
+    }
+
+    void reloadListofTokens() {
+        nlohmann::json data;
+        nlohmann::json result;
+        nlohmann::json temp;
+        
+        GetAccountList(data);
+        
+        size_t size = data["response"]["servers"].size();
+
+        for (size_t i = 0; i < size; ++i) {
+            std::string steamIDToken = data["response"]["servers"][i]["steamid"];
+            temp["GameID"] = data["response"]["servers"][i]["appid"];
+            temp["Identifier"] = data["response"]["servers"][i]["login_token"];
+            temp["Memo"] = data["response"]["servers"][i]["memo"];
+            result[steamIDToken] = temp;
+            ++currentToken;
+        }
+        if (overwriteTokens(result)) {
+            std::cout << "Токены сервера успешно синхронизированы с файлом JSON" << std::endl;
+            std::cout << "У вас " << size << " токенов сервера." << std::endl;
+        }
+        else {
+            std::cout << "Токены не были синхронизированы!" << std::endl;
+        }
+    }
+
+    void ListOfTokensJSON() {
+        std::ifstream file("tokenGenerator.json");
+        nlohmann::json data = nlohmann::json::parse(file);
+        for (auto it = data["ServerTokens"].begin(); it != data["ServerTokens"].end(); ++it) {
+            std::cout << "MEMO: " << it.value()["Memo"] << std::endl;
+            std::cout << "\tSTEAM ID TOKEN: " << it.value()["Identifier"] << std::endl;
+            std::cout << "\tAPP ID: " << it.value()["GameID"] << std::endl;
+            std::cout << "\tLOGIN TOKEN: " << it.key() << std::endl;
+            std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
+        }
+        std::cout << "У вас " << data["ServerTokens"].size() << " токенов сервера." << std::endl;
+    }
+
+    void ListOfTokensSteam() {
+        nlohmann::json data;
+        GetAccountList(data);
+        size_t size = data["response"]["servers"].size();
+        for (size_t i = 0; i < size; ++i) {
             std::cout << "MEMO: " << data["response"]["servers"][i]["memo"] << std::endl;
             std::cout << "\tSTEAM ID TOKEN: " << data["response"]["servers"][i]["steamid"] << std::endl;
             std::cout << "\tAPP ID: " << data["response"]["servers"][i]["appid"] << std::endl;
@@ -180,56 +310,154 @@ public:
             else std::cout << "NEVER" << std::endl;
             std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
         }
+        std::cout << "У вас " << size << " токенов сервера." << std::endl;
     }
 
-    void ResetLoginToken(const std::string& steamIdOfServer) {
-        nlohmann::json data;
-        performPostRequest(data, "https://api.steampowered.com/IGameServersService/ResetLoginToken/v1/",
-        "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
+};
+
+enum class StageInput {
+    START_PROGFRAMM,
+    LIST_TOKES,
+    CHECK_TOKENS,
+    DELETE_TOKEN
+};
+
+class ControllerOfGenerator {
+private:
+    ServerTokenGenerate generator;
+    StageInput stageInput = StageInput::START_PROGFRAMM;
+public:
+    ControllerOfGenerator(const std::string& steamToken) :
+        generator(steamToken) {
+        generator.reloadListofTokens();
     }
 
-    void DeleteAccount(const std::string& steamIdOfServer) {
-        nlohmann::json data;
-        performPostRequest(data, "https://api.steampowered.com/IGameServersService/DeleteAccount/v1/",
-            "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
-        --currentToken;
-    }
+    void run() {
+        std::string userInput;
 
-    void getUselessTokens(std::vector<std::string>& vectorOfUselessTokens) {
-        nlohmann::json data;
-        GetAccountList(data);
-        for (size_t i = 0; i < data["response"]["servers"].size(); ++i) {
-            if (data["response"]["servers"][i]["is_expired"])
-                vectorOfUselessTokens.push_back(data["response"]["servers"][i]["steamid"]);
-            else continue;
+        while (userInput != "exit") {
+
+            if (stageInput == StageInput::START_PROGFRAMM) {
+                std::cout << "1. Список токенов;" << std::endl;
+                std::cout << "2. Проверить работоспособность всех токенов;" << std::endl;
+                std::cout << "3. Удалить токен(ны);" << std::endl;
+                std::cout << "4. Создать токен;" << std::endl;
+                std::cout << "Завершить программу: \"exit\"" << std::endl;
+                std::cout << "Введите необходимую цифру: ";
+                std::getline(std::cin, userInput);
+                if (userInput == "1") {
+                    stageInput = StageInput::LIST_TOKES;
+                    ListOfTokens();
+                }
+                else if (userInput == "2") {
+                    std::vector<std::string> vectorOfUselessTokens;
+                    generator.getUselessTokens(vectorOfUselessTokens);
+                    if (vectorOfUselessTokens.size()) {
+                        stageInput = StageInput::CHECK_TOKENS;
+                        CheckTokens(vectorOfUselessTokens);
+                    }
+                }
+                else if (userInput == "3") {
+                    stageInput = StageInput::DELETE_TOKEN;
+                    DeleteToken();
+                }
+
+            }
+        }
+    }
+private:
+    
+    void DeleteToken() {
+        std::string userInput;
+
+        while (userInput != "4") {
+            std::cout << "1. Получить список всех токенов STEAM;" << std::endl;
+            std::cout << "2. Удалить конкертный токен;" << std::endl;
+            std::cout << "3. Удалить все токены;" << std::endl;
+            std::cout << "4. Вернуться обратно; " << std::endl;
+            std::cout << "Введите необходимую цифру: ";
+
+            std::getline(std::cin, userInput);
+
+            if (userInput == "1") {
+
+                generator.ListOfTokensJSON();
+            }
+            else if (userInput == "2")
+                generator.ListOfTokensSteam();
+            else if (userInput == "4") {
+                stageInput = StageInput::START_PROGFRAMM;
+                return;
+            }
         }
     }
 
-    void fixExpiredTokens() {
-        std::vector<std::string> vectorOfUselessTokens;
-        getUselessTokens(vectorOfUselessTokens);
-        while (!vectorOfUselessTokens.empty()) {
-            ResetLoginToken(vectorOfUselessTokens.back());
-            vectorOfUselessTokens.pop_back();
+    void CheckTokens(std::vector<std::string>& vectorOfUselessTokens) {
+        std::string userInput;
+
+        while (userInput != "5") {
+            std::cout << "1. Вывести все нерабочие токены;" << std::endl;
+            std::cout << "2. Обновить все нерабочие токены;" << std::endl;
+            std::cout << "3. Обновить конкертный нерабочий токен;" << std::endl;
+            std::cout << "4. Удалить нерабочие токены;" << std::endl;
+            std::cout << "5. Вернуться обратно; " << std::endl;
+            std::cout << "Введите необходимую цифру: ";
+
+            std::getline(std::cin, userInput);
+
+            if (userInput == "1") {
+                for (size_t i = 0; i < vectorOfUselessTokens.size(); ++i)
+                    std::cout << i + 1 << ": " << vectorOfUselessTokens[i] << std::endl;
+            }
+            else if (userInput == "2") {
+                for (size_t i = 0; i < vectorOfUselessTokens.size(); ++i)
+                    generator.ResetLoginToken(vectorOfUselessTokens[i]);
+            }
+            else if (userInput == "3") {
+                std::string getTokenSteamId;
+                std::getline(std::cin, getTokenSteamId);
+                for (size_t i = 0; i < vectorOfUselessTokens.size(); ++i) {
+                    if (getTokenSteamId == vectorOfUselessTokens[i]) {
+                        generator.ResetLoginToken(getTokenSteamId);
+                        continue;
+                    }
+                }
+                std::cout << "Вы ввели неверный токен: " << getTokenSteamId << std::endl;
+            }
+            else if (userInput == "4") {
+                for (size_t i = 0; i < vectorOfUselessTokens.size(); ++i)
+                    generator.DeleteAccount(vectorOfUselessTokens[i]);
+            }
+            else if (userInput == "5") {
+                stageInput = StageInput::START_PROGFRAMM;
+                return;
+            }
         }
     }
 
-    void reloadListofTokens() {
-        nlohmann::json data;
-        nlohmann::json result;
-        nlohmann::json temp;
-        
-        GetAccountList(data);
-        
-        for (size_t i = 0; i < data["response"]["servers"].size(); ++i) {
-            std::string steamIDToken = data["response"]["servers"][i]["steamid"];
-            temp["GameID"] = data["response"]["servers"][i]["appid"];
-            temp["Identifier"] = data["response"]["servers"][i]["login_token"];
-            temp["Memo"] = data["response"]["servers"][i]["memo"];
-            result[steamIDToken] = temp;
-            ++currentToken;
+    void ListOfTokens() {
+        std::string userInput;
+
+        while (userInput != "4") {
+            std::cout << "1. Вывести список из JSON-файла;" << std::endl;
+            std::cout << "2. Вывести список из STEAM;" << std::endl;
+            std::cout << "3. Синхронизировать токены;" << std::endl;
+            std::cout << "4. Вернуться обратно; " << std::endl;
+            std::cout << "Введите необходимую цифру: ";
+
+            std::getline(std::cin, userInput);
+
+            if (userInput == "1")
+                generator.ListOfTokensJSON();
+            else if (userInput == "2")
+                generator.ListOfTokensSteam();
+            else if (userInput == "3")
+                generator.reloadListofTokens();
+            else if (userInput == "4") {
+                stageInput = StageInput::START_PROGFRAMM;
+                return;
+            }
         }
-        overwriteTokens(result);
     }
 };
 
@@ -240,18 +468,12 @@ int main() {
 	nlohmann::json data = nlohmann::json::parse(file);
 	std::string steamToken = data["SteamToken"];
 
-	ServerTokenGenerate generator(steamToken);
+    //ControllerOfGenerator controller(steamToken);
+    //controller.run();
 
-	//std::cout << generator.getSteamToken() << std::endl;
-
-    //generator.makeServerToken(2);
-    //generator.ListOfTokens();
-    //generator.ListOfTokens();
+    ServerTokenGenerate generator(steamToken);
     //generator.reloadListofTokens();
-    //generator.fixExpiredTokens();
-    //generator.reloadListofTokens();
-    //generator.ListOfTokens();
-    //generator.makeServerToken(3);
+    generator.ResetLoginToken("asd");
 
 	return 0;
 }
