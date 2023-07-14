@@ -11,8 +11,6 @@
 #include "ServerTokenGenerate.h"
 
 int main() {
-    setlocale(LC_ALL, "rus");
-
 	std::ifstream file("tokenGenerator.json");
 	nlohmann::json data = nlohmann::json::parse(file);
 	std::string steamToken = data["SteamToken"];
