@@ -29,11 +29,11 @@ void ServerTokenGenerate::makeServerToken(int count) {
         temp["GameID"] = "730";
         std::string steamidtoken = data["response"]["steamid"];
         result[steamidtoken] = temp;
-        std::cout << "Токен " << steamidtoken << " успешно создан." << std::endl;
+        std::cout << "Token " << steamidtoken << " has been successfully created." << std::endl;
     }
     if (writeTokens(result))
-        std::cout << "Токен успешно записан в JSON-файл." << std::endl;
-    else std::cout << "Токен не был записан в JSON-файл." << std::endl;
+        std::cout << "Token has been successfully written to the JSON file." << std::endl;
+    else std::cout << "Token was not written to the JSON file." << std::endl;
 }
 
 bool ServerTokenGenerate::overwriteTokens(const nlohmann::json& result) {
@@ -48,8 +48,8 @@ bool ServerTokenGenerate::overwriteTokens(const nlohmann::json& result) {
         return true;
     }
     else {
-        std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
-        std::cout << "Проверьте его расположенине и название!" << std::endl;
+        std::cout << "Failed to open file: \"tokenGenerator.json\"" << std::endl;
+        std::cout << "Please check its location and name!" << std::endl;
         return false;
     }
 }
@@ -66,8 +66,8 @@ bool ServerTokenGenerate::writeTokens(const nlohmann::json& result) {
         return true;
     }
     else {
-        std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
-        std::cout << "Проверьте его расположенине и название!" << std::endl;
+        std::cout << "Failed to open the file: \"tokenGenerator.json\"" << std::endl;
+        std::cout << "Please check its location and name!" << std::endl;
         return false;
     }
 }
@@ -146,12 +146,11 @@ void ServerTokenGenerate::SetMemo(const std::string& steamIdOfServer, const std:
         "&steamid=" + steamIdOfServer + "&memo=" + newMemo);
     if (data.contains("response") && data["response"].is_object() && data["response"].empty()) {
         if (UpdateMemoInJsonFile(steamIdOfServer, newMemo)) {
-            std::cout << "Описание токена " << steamIdOfServer << " успешно обновлено на " << newMemo << "!" << std::endl;
-            --currentToken;
+            std::cout << "Token description for " << steamIdOfServer << " has been successfully updated to " << newMemo << "!" << std::endl; --currentToken;
         }
     }
     else
-        std::cout << "Произошла ошибка или Вы ввели неверные данные, попробуйте позже!" << std::endl;
+        std::cout << "An error occurred or you entered incorrect data. Please try again later!" << std::endl;
 }
 
 void ServerTokenGenerate::ResetLoginToken(const std::string& steamIdOfServer) {
@@ -171,14 +170,14 @@ void ServerTokenGenerate::ResetLoginToken(const std::string& steamIdOfServer) {
     if (data.contains("response") && data["response"].is_object()) {
         if (!data["response"].empty()) {
             if (UpdateTokenIdentificatorInJsonFile(steamIdOfServer, data["response"]["login_token"]))
-                std::cout << "Данные токена " << steamIdOfServer << " успешно обновлены!" << std::endl;
+                std::cout << "Token data for " << steamIdOfServer << " has been successfully updated!" << std::endl;
             else return;
         }
         else
-            std::cout << "Вы не можете обновить токен " << steamIdOfServer << ", так как недавно обновляли его!" << std::endl;
+            std::cout << "You cannot update the token for " << steamIdOfServer << " as it was recently updated!" << std::endl;
     }
     else
-        std::cout << "Произошла ошибка или Вы ввели неверные данные, попробуйте позже!" << std::endl;
+        std::cout << "An error occurred or you entered incorrect data. Please try again later!" << std::endl;
 }
 
 bool ServerTokenGenerate::UpdateMemoInJsonFile(const std::string& steamIfOfServer, const std::string& newMemo) {
@@ -193,8 +192,8 @@ bool ServerTokenGenerate::UpdateMemoInJsonFile(const std::string& steamIfOfServe
         return true;
     }
     else {
-        std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
-        std::cout << "Проверьте его расположенине и название!" << std::endl;
+        std::cout << "Failed to open the file: \"tokenGenerator.json\"" << std::endl;
+        std::cout << "Please check its location and name!" << std::endl;
         return false;
     }
 }
@@ -211,8 +210,8 @@ bool ServerTokenGenerate::DeleteTokenFromJsonFile(const std::string& steamIdOfSe
         return true;
     }
     else {
-        std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
-        std::cout << "Проверьте его расположенине и название!" << std::endl;
+        std::cout << "Failed to open the file: \"tokenGenerator.json\"" << std::endl;
+        std::cout << "Please check its location and name!" << std::endl;
         return false;
     }
 }
@@ -229,8 +228,8 @@ bool ServerTokenGenerate::UpdateTokenIdentificatorInJsonFile(const std::string& 
         return true;
     }
     else {
-        std::cout << "Не удалось открыть файл: \"tokenGenerator.json\"" << std::endl;
-        std::cout << "Проверьте его расположенине и название!" << std::endl;
+        std::cout << "Failed to open the file: \"tokenGenerator.json\"" << std::endl;
+        std::cout << "Please check its location and name!" << std::endl;
         return false;
     }
 }
@@ -250,12 +249,12 @@ void ServerTokenGenerate::DeleteAccount(const std::string& steamIdOfServer) {
         "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
     if (data.contains("response") && data["response"].is_object() && data["response"].empty()) {
         if (DeleteTokenFromJsonFile(steamIdOfServer)) {
-            std::cout << "Токен " << steamIdOfServer << " успешно удален!" << std::endl;
+            std::cout << "Token " << steamIdOfServer << " has been successfully deleted!" << std::endl;
             --currentToken;
         }
     }
     else
-        std::cout << "Произошла ошибка или Вы ввели неверные данные, попробуйте позже!" << std::endl;
+        std::cout << "An error occurred or you entered incorrect data. Please try again later!" << std::endl;
 }
 
 void ServerTokenGenerate::getUselessTokens(std::vector<std::string>& vectorOfUselessTokens) {
@@ -269,9 +268,9 @@ void ServerTokenGenerate::getUselessTokens(std::vector<std::string>& vectorOfUse
     }
     size_t size = vectorOfUselessTokens.size();
     if (size)
-        std::cout << "У Вас " << " неработоспособных токенов!" << std::endl;
+        std::cout << "You have " << size << " dysfunctional tokens!" << std::endl;
     else
-        std::cout << "У Вас нет неработоспособных токенов!" << std::endl;
+        std::cout << "You have no dysfunctional tokens!" << std::endl;
 }
 
 void ServerTokenGenerate::fixExpiredTokens() {
@@ -302,11 +301,11 @@ void ServerTokenGenerate::reloadListofTokens() {
     }
     currentToken = size;
     if (overwriteTokens(result)) {
-        std::cout << "Токены сервера успешно синхронизированы с файлом JSON" << std::endl;
-        std::cout << "У вас " << size << " токенов сервера." << std::endl;
+        std::cout << "Server tokens have been successfully synchronized with the JSON file." << std::endl;
+        std::cout << "You have " << size << " server tokens." << std::endl;
     }
     else {
-        std::cout << "Токены не были синхронизированы!" << std::endl;
+        std::cout << "Tokens were not synchronized!" << std::endl;
     }
 }
 
@@ -351,5 +350,5 @@ void ServerTokenGenerate::ListOfTokensSteam() {
         else std::cout << "NEVER" << std::endl;
         std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
     }
-    std::cout << "У вас " << size << " токенов сервера." << std::endl;
+    std::cout << "You have " << size << " server tokens." << std::endl;
 }

@@ -9,7 +9,7 @@
 #include <fstream>
 #include <ctime>
 
-// Функция обратного вызова для обработки полученных данных от CURL
+// Callback function to handle the received data from CURL
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* response);
 
 class ServerTokenGenerate {
@@ -30,10 +30,10 @@ public:
 
     bool writeTokens(const nlohmann::json& result);
 
-    // Функция для выполнения GET-запроса
+    // Function to perform a GET request
     void performGetRequest(nlohmann::json& data, const std::string& requestURL);
 
-    // Функция для выполнения POST-запроса
+    // Function to perform a POST request
     void performPostRequest(nlohmann::json& data, const std::string& requestURL, const std::string& dataURL);
 
     void CreateAccountRequest(nlohmann::json& data, const std::string& memo, const std::string& appid);
