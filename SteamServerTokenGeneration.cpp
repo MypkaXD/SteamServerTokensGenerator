@@ -3,6 +3,7 @@
 #include <curl/curl.h>
 
 #include <string>
+#include <vector>
 #include <fstream>
 #include <ctime>
 
@@ -39,19 +40,35 @@ public:
         nlohmann::json data;
         nlohmann::json result;
 		for (int i = 0; i < count; ++i) {
-            createAccountRequest(data);
             std::string nameOfToken = "steamserver_token_" + std::to_string(currentToken);
+            CreateAccountRequest(data, nameOfToken, "730");
             ++currentToken;
-            result[nameOfToken] = data["response"]["login_token"];
+            nlohmann::json temp;
+            temp["Memo"] = nameOfToken;
+            temp["Identifier"] = data["response"]["login_token"];
+            temp["GameID"] = "730";
+            std::string steamidtoken = data["response"]["steamid"];
+            result[steamidtoken] = temp;
 		}
-
         writeTokens(result);
 	}
     
-    void writeTokens(const nlohmann::json& result) {
+    void overwriteTokens(const nlohmann::json& result) {
         std::ifstream file("tokenGenerator.json");
         nlohmann::json temp = nlohmann::json::parse(file);
         temp["ServerTokens"] = result;
+
+        std::ofstream outputFile("tokenGenerator.json");
+        if (outputFile.is_open()) {
+            outputFile << temp.dump(4);
+            outputFile.close();
+        }
+    }
+
+    void writeTokens(const nlohmann::json& result) {
+        std::ifstream file("tokenGenerator.json");
+        nlohmann::json temp = nlohmann::json::parse(file);
+        temp["ServerTokens"].merge_patch(result);
 
         std::ofstream outputFile("tokenGenerator.json");
         if (outputFile.is_open()) {
@@ -122,25 +139,23 @@ public:
         }
     }
 
-	void createAccountRequest(nlohmann::json& data) {
-        performPostRequest(data, "https://api.steampowered.com/IGameServersService/CreateAccount/v1/", "key=" + tokenSteam + "&appid=730&memo=" + std::to_string(currentToken));
+	void CreateAccountRequest(nlohmann::json& data, const std::string& memo, const std::string& appid) {
+        performPostRequest(data, "https://api.steampowered.com/IGameServersService/CreateAccount/v1/", "key=" + tokenSteam + "&appid=" + appid + "&memo=" + memo);
 	}
 
-    void getAccountList(nlohmann::json& data) {
+    void GetAccountList(nlohmann::json& data) {
         performGetRequest(data, "https://api.steampowered.com/IGameServersService/GetAccountList/v1/?key=" + tokenSteam);
     }
 
-    void getInfoAboutAcc(nlohmann::json& profile) {
-        performGetRequest(profile, "https://api.steampowered.com/ISteamUser/GetFriendList/v1/?key=71E0A7D32231C2476D87BAA309D4AA94&steamid=76561198240949338");
-    }
-
-    void SetMemo() {
-
+    void SetMemo(const std::string& steamIdOfServer, const std::string& newMemo) {
+        nlohmann::json data;
+        performPostRequest(data, "https://api.steampowered.com/IGameServersService/SetMemo/v1/", "key=" + tokenSteam +
+            "&steamid=" + steamIdOfServer + "&memo=" + newMemo);
     }
 
     void ListOfTokens() {
         nlohmann::json data;
-        getAccountList(data);
+        GetAccountList(data);
         for (size_t i = 0; i < data["response"]["servers"].size(); ++i) {
             std::cout << "MEMO: " << data["response"]["servers"][i]["memo"] << std::endl;
             std::cout << "\tSTEAM ID TOKEN: " << data["response"]["servers"][i]["steamid"] << std::endl;
@@ -157,16 +172,64 @@ public:
             // Преобразование в нормальное время по UTC
             std::cout << "\tLAST LOGON : ";
             unsigned int temp = data["response"]["servers"][i]["rt_last_logon"];
-            std::cout << temp << std::endl;
             if (temp) {
                 time_t lastLogonTime = static_cast<time_t>(temp);
                 std::tm* utcTime = std::gmtime(&lastLogonTime);
                 std::cout << asctime(utcTime) << "(UTC)" << std::endl;
             }
-            else std::cout << "never" << std::endl;
+            else std::cout << "NEVER" << std::endl;
             std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++" << std::endl;
         }
+    }
 
+    void ResetLoginToken(const std::string& steamIdOfServer) {
+        nlohmann::json data;
+        performPostRequest(data, "https://api.steampowered.com/IGameServersService/ResetLoginToken/v1/",
+        "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
+    }
+
+    void DeleteAccount(const std::string& steamIdOfServer) {
+        nlohmann::json data;
+        performPostRequest(data, "https://api.steampowered.com/IGameServersService/DeleteAccount/v1/",
+            "key=" + tokenSteam + "&steamid=" + steamIdOfServer);
+        --currentToken;
+    }
+
+    void getUselessTokens(std::vector<std::string>& vectorOfUselessTokens) {
+        nlohmann::json data;
+        GetAccountList(data);
+        for (size_t i = 0; i < data["response"]["servers"].size(); ++i) {
+            if (data["response"]["servers"][i]["is_expired"])
+                vectorOfUselessTokens.push_back(data["response"]["servers"][i]["steamid"]);
+            else continue;
+        }
+    }
+
+    void fixExpiredTokens() {
+        std::vector<std::string> vectorOfUselessTokens;
+        getUselessTokens(vectorOfUselessTokens);
+        while (!vectorOfUselessTokens.empty()) {
+            ResetLoginToken(vectorOfUselessTokens.back());
+            vectorOfUselessTokens.pop_back();
+        }
+    }
+
+    void reloadListofTokens() {
+        nlohmann::json data;
+        nlohmann::json result;
+        nlohmann::json temp;
+        
+        GetAccountList(data);
+        
+        for (size_t i = 0; i < data["response"]["servers"].size(); ++i) {
+            std::string steamIDToken = data["response"]["servers"][i]["steamid"];
+            temp["GameID"] = data["response"]["servers"][i]["appid"];
+            temp["Identifier"] = data["response"]["servers"][i]["login_token"];
+            temp["Memo"] = data["response"]["servers"][i]["memo"];
+            result[steamIDToken] = temp;
+            ++currentToken;
+        }
+        overwriteTokens(result);
     }
 };
 
@@ -179,10 +242,16 @@ int main() {
 
 	ServerTokenGenerate generator(steamToken);
 
-	std::cout << generator.getSteamToken() << std::endl;
+	//std::cout << generator.getSteamToken() << std::endl;
 
-    generator.makeServerToken(1);
-    generator.ListOfTokens();
+    //generator.makeServerToken(2);
+    //generator.ListOfTokens();
+    //generator.ListOfTokens();
+    //generator.reloadListofTokens();
+    //generator.fixExpiredTokens();
+    //generator.reloadListofTokens();
+    //generator.ListOfTokens();
+    //generator.makeServerToken(3);
 
 	return 0;
 }
